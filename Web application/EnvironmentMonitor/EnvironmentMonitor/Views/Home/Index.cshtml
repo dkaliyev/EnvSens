@@ -1,0 +1,235 @@
+﻿@{
+    ViewBag.Title = "Index";
+}
+
+<html>
+<head>
+    <title>@ViewBag.Title</title>
+    <!--<script type="text/javascript" src="js/utils.js"></script>-->
+    @Styles.Render("~/Content/chartcss");
+    <script>
+        var tmp = null;
+        dt = null;
+        $(function () {
+            console.log("Test");
+            test = "Test";
+            var margin = { top: 20, right: 20, bottom: 30, left: 50 },
+            width = 960 - margin.left - margin.right,
+            height = 500 - margin.top - margin.bottom;
+
+            var parseDate = d3.time.format("%Y-%m-%dT%XZ").parse;
+            var x = d3.time.scale()
+                    .range([0, width]);
+
+            var y = d3.scale.linear()
+                    .range([height, 0]);
+
+            var xAxis = d3.svg.axis()
+                    .scale(x)
+                    .orient("bottom");
+
+            var yAxis = d3.svg.axis()
+                    .scale(y)
+                    .orient("left");
+
+            var line = d3.svg.line()
+                    .x(function (d, i) { return x(d.date); })
+                    .y(function (d) { return y(d.Reading); });
+
+            /*var area = d3.svg.area()
+                    .x(function (d) { return x(d.date); })
+                    .y0(height)
+                    .y1(function (d) { return y(d.Reading); });*/
+
+            svg = d3.select("body").append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            /* svg.append("defs").append("clipPath")
+                 .attr("id", "clip")
+               .append("rect")
+                 .attr("width", width)
+                 .attr("height", height);*/
+
+            sensorsServer = $.connection.sensors;
+
+            sensorsServer.client.addNewSensorReading = function (msg) {
+                appendData(msg, x, y);
+            };
+
+            sensorsServer.client.loadData = function (data) {
+                var ls = generateRandomData1(100, 100, 600);
+                //tmp1 = ls;
+                /*for(var i=0; i<ls.length; i++)
+                {
+                    appendRow(ls[i]);
+                }*/
+                //ls = convertData(ls);
+                tmp = getList(ls);
+                appendChart(tmp, x, y);
+            };
+
+            $.connection.hub.start().done(function () {
+                /*var ls = generateRandomData1(100, 100, 600);
+                tmp = getList(ls);
+                appendChart(tmp, x, y);*/
+                $.get("api/readings", function (data) {
+                    var tmp = getList(data);
+                    appendChart(data, x, y);
+                }
+                );
+            });
+
+
+            appendChart = function (data, x, y) {
+                dt = data;
+                dt.forEach(function (d) {
+                    d.date = parseDate(d.date);
+                    d.Reading = parseInt(d.Reading);
+                });
+                if (dt != []) {
+                    x.domain(d3.extent(dt, function (d) { return d.date; }));
+                    y.domain(d3.extent(dt, function (d) { return d.Reading; }));
+                }
+
+
+                path = svg.append("g")
+                    //.attr("clip-path", "url(#clip)")
+                    .append("path")
+                    .datum(dt)
+                    .attr("class", "line")
+                    .attr("d", line);
+
+                axisX = svg.append("g")
+                  .attr("class", "x axis")
+                  .attr("transform", "translate(0," + height + ")")
+                  .call(xAxis)
+                  .append("text")
+                  .attr("x", width)
+                   .attr("dx", "1em")
+                   .style("text-anchor", "end")
+                   .text("Timeline");
+
+                axisY = svg.append("g")
+                  .attr("class", "y axis")
+                  .call(yAxis)
+                .append("text")
+                  .attr("transform", "rotate(-90)")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .text("Sensor reading");
+
+
+                console.log("Graph appended");
+            }
+
+            appendData = function (newData, x, y) {
+                //var frstP = dt[dt.length - 1].date;
+                //var lstP = frstP + 60 * 1000;
+                //var dif = frstP - lstP;
+                dt.push({ Reading: parseInt(newData.Reading), date: parseDate(newData.date)});
+                if (dt.length > 20)
+                    dt.shift();
+                x.domain(d3.extent(dt, function (d) { return d.date; }));
+                y.domain(d3.extent(dt, function (d) { return d.Reading; }));
+
+                axisX.transition()
+                  .duration(2000)
+                  .ease("linear")
+                  .call(xAxis);
+
+                console.log("end ");
+                console.log(x);
+                // redraw the line, and then slide it to the left
+                path.attr("d", line)
+                    .attr("transform", null)
+                    .transition()
+                    .duration(2000)
+                    .ease("linear");
+                //.attr("transform", "translate(" + 0 + ",0)");
+                // .each("end", appendData);
+
+                // pop the old data point off the front
+            }
+
+            function convertData(ls) {
+                ls.forEach(function (d) {
+                    ls.Reading = +d.Reading;
+                });
+
+                return ls;
+            }
+
+            function getList(ls) {
+                var list1 = [];
+                ls.forEach(function (d) {
+                    //var dtime = new Date();
+                    //dtime.setTime(parseInt(d.date));
+                    //var st = dtime.getFullYear() + "-" + dtime.getUTCMonth() + 1 + "-" + dtime.getUTCDate() + "T" + dtime.getUTCHours() + ":" + dtime.getUTCMinutes() + ":" + dtime.getUTCSeconds() + "Z";
+                    var tmp = { Reading: d.Reading, date: d.date, SensorId: d.SensorId };
+                    list1.push(tmp);
+                });
+                return list1;
+            }
+
+
+            var rand = function (l, low, high) { //l = length of list; d = dimension
+                var list2 = [];
+                for (i = 0; i < l; i++) {
+                    list2[i] = Math.floor(Math.random() * (high - low + 1) + low);
+                }
+                return list2;
+            }
+
+            generateRandomData1 = function (l, low, high) {
+                var list3 = [];
+                var readingsList = rand(l, low, high);
+                var myDate = (new Date()).getTime();
+                tst = new Date();
+
+                for (i = 0; i < l; i++) {
+                    list3[i] = { sId: 1, Reading: readingsList[i], date: (new Date()).setTime(myDate + i * 1000 * 60) };
+                    console.log(i + ": " + list3[i].date);
+                }
+                console.log("Test " + list3[3].date);
+                return list3;
+            }
+
+        });
+
+        function appendRow(msg) {
+            var dat = (new Date()).toUTCString();
+            /*var dataCol = $('<td></td>').text(msg.sReading);
+        	var nodeCol = $('<td></td>').text(msg.sId);
+        	var dateCol = $('<td></td>').text(msg.date);*/
+            var dataCol = $('<td></td>').text(msg);
+            var nodeCol = $('<td></td>').text(1);
+            var dateCol = $('<td></td>').text(dat);
+            var row = $('<tr></tr>');
+            row.append(dataCol);
+            row.append(nodeCol);
+            row.append(dateCol);
+            $('#sensorData').append(row);
+        }
+
+
+    </script>
+</head>
+<body>
+    <h2>Dust sensor data:</h2>
+    <br>
+    <!--<table id="sensorData" class="table table-striped">
+        <tr>
+            <th>Sensor readings</th>
+            <th>Node ID</th>
+            <th>Date added</th>
+        </tr>
+    </table>-->
+    @Scripts.Render("~/bundles/d3js");
+    @Scripts.Render("~/bundles/SignalRjs");
+    <script type="text/javascript" src="signalr/hubs"></script>
+</body>
+</html>
